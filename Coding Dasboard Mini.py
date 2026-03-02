@@ -1,80 +1,158 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.linear_model import LinearRegression
 
-# ===============================
-# KONFIGURASI HALAMAN
-# ===============================
-st.set_page_config(
-    page_title="Dashboard Analisis Siswa",
-    layout="wide"
-)
+st.set_page_config(layout="wide")
 
-st.title("📊 Dashboard Analisis Data Siswa")
+st.title("📊 DASHBOARD ANALISIS DATA SISWA")
 
 # ===============================
 # LOAD DATA
 # ===============================
-file_path = "data_simulasi_50_siswa_20_soal.xlsx"
-df = pd.read_excel(file_path)
+file = "data_simulasi_50_siswa_20_soal.xlsx"
+df = pd.read_excel(file)
 
-# Ambil kolom soal saja
-kolom_soal = df.columns[1:]
-
-# ===============================
-# HITUNG STATISTIK
-# ===============================
-df["Rata-rata Siswa"] = df[kolom_soal].mean(axis=1)
-rata_soal = df[kolom_soal].mean()
+st.subheader("📋 Data Identitas & Skor")
+st.dataframe(df)
 
 # ===============================
-# METRICS
+# IDENTIFIKASI DATA
 # ===============================
-st.subheader("📌 Statistik Umum")
-
-col1, col2, col3 = st.columns(3)
-
-col1.metric("Jumlah Responden", len(df))
-col2.metric("Jumlah Soal", len(kolom_soal))
-col3.metric("Rata-rata Keseluruhan", round(df["Rata-rata Siswa"].mean(), 2))
+soal_cols = [c for c in df.columns if "Soal" in c]
 
 # ===============================
-# GRAFIK RATA-RATA PER SOAL
+# DATA OTOMATIS
 # ===============================
-st.subheader("📈 Rata-rata Nilai Tiap Soal")
+df["Total_Nilai"] = df[soal_cols].sum(axis=1)
+df["Rata_siswa"] = df[soal_cols].mean(axis=1)
+
+rata_soal = df[soal_cols].mean()
+
+# ===============================
+# STATISTIK DESKRIPTIF
+# ===============================
+st.header("📈 Statistik Deskriptif")
+
+statistik = df[soal_cols].describe().T
+statistik["median"] = df[soal_cols].median()
+statistik["modus"] = df[soal_cols].mode().iloc[0]
+
+st.dataframe(statistik)
+
+# ===============================
+# TABEL ANALISIS
+# ===============================
+st.header("📋 Tabel Analisis")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Tabel Skor Siswa")
+    st.dataframe(df[["Responden","Total_Nilai","Rata_siswa"]])
+
+with col2:
+    st.subheader("Rata-rata Soal")
+    st.dataframe(rata_soal)
+
+# ===============================
+# BAR CHART RATA-RATA SOAL
+# ===============================
+st.header("📊 Grafik Rata-rata Soal")
 
 fig1, ax1 = plt.subplots()
-ax1.bar(rata_soal.index, rata_soal.values)
-plt.xticks(rotation=90)
-ax1.set_ylabel("Nilai Rata-rata")
+rata_soal.plot(kind="bar", ax=ax1)
+ax1.set_ylabel("Rata-rata")
 st.pyplot(fig1)
 
 # ===============================
-# DISTRIBUSI NILAI SISWA
+# LINE CHART SKOR SISWA
 # ===============================
-st.subheader("📊 Distribusi Rata-rata Nilai Siswa")
+st.header("📈 Grafik Skor Total Siswa")
 
 fig2, ax2 = plt.subplots()
-ax2.hist(df["Rata-rata Siswa"], bins=10)
-ax2.set_xlabel("Rata-rata Nilai")
-ax2.set_ylabel("Jumlah Siswa")
+ax2.plot(df["Total_Nilai"])
+ax2.set_xlabel("Siswa")
+ax2.set_ylabel("Total Nilai")
 st.pyplot(fig2)
 
 # ===============================
-# TABEL DATA
+# DISTRIBUSI DATA (HISTOGRAM)
 # ===============================
-st.subheader("📋 Data Lengkap")
+st.header("📉 Distribusi Nilai")
 
-st.dataframe(df, use_container_width=True)
+fig3, ax3 = plt.subplots()
+ax3.hist(df["Total_Nilai"], bins=10)
+ax3.set_xlabel("Total Nilai")
+ax3.set_ylabel("Frekuensi")
+st.pyplot(fig3)
 
 # ===============================
-# FILTER SISWA
+# DIAGRAM LINGKARAN
 # ===============================
-st.subheader("🔎 Filter Berdasarkan Responden")
+st.header("🥧 Diagram Lingkaran Kategori Nilai")
 
-nama = st.selectbox("Pilih Responden", df["Responden"])
+kategori = pd.cut(
+    df["Total_Nilai"],
+    bins=3,
+    labels=["Rendah", "Sedang", "Tinggi"]
+)
 
-data_siswa = df[df["Responden"] == nama]
+pie_data = kategori.value_counts()
 
-st.write("Detail Nilai:")
-st.dataframe(data_siswa)
+fig4, ax4 = plt.subplots()
+ax4.pie(pie_data, labels=pie_data.index, autopct="%1.1f%%")
+st.pyplot(fig4)
+
+# ===============================
+# KORELASI
+# ===============================
+st.header("🔗 Heatmap Korelasi")
+
+corr = df[soal_cols].corr()
+
+fig5, ax5 = plt.subplots(figsize=(10,6))
+sns.heatmap(corr, annot=False, cmap="coolwarm", ax=ax5)
+st.pyplot(fig5)
+
+# ===============================
+# REGRESI LINEAR
+# ===============================
+st.header("📉 Regresi Linear")
+
+X = df[["Rata_siswa"]]
+y = df["Total_Nilai"]
+
+model = LinearRegression()
+model.fit(X, y)
+
+prediksi = model.predict(X)
+
+fig6, ax6 = plt.subplots()
+ax6.scatter(X, y)
+ax6.plot(X, prediksi)
+ax6.set_xlabel("Rata-rata Siswa")
+ax6.set_ylabel("Total Nilai")
+st.pyplot(fig6)
+
+st.write("Koefisien Regresi:", model.coef_[0])
+st.write("Intercept:", model.intercept_)
+st.write("R² Score:", model.score(X, y))
+
+# ===============================
+# KESIMPULAN OTOMATIS
+# ===============================
+st.header("🧠 Kesimpulan Otomatis")
+
+mean_total = df["Total_Nilai"].mean()
+
+if mean_total > df["Total_Nilai"].max()*0.7:
+    kesimpulan = "Performa siswa secara umum TINGGI."
+elif mean_total > df["Total_Nilai"].max()*0.4:
+    kesimpulan = "Performa siswa berada pada kategori SEDANG."
+else:
+    kesimpulan = "Performa siswa masih RENDAH."
+
+st.success(kesimpulan)
